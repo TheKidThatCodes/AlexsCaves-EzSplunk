@@ -489,7 +489,7 @@ public class SpelunkeryTableScreen extends AbstractContainerScreen<SpelunkeryTab
         if (finishedLevel) {
             return;
         }
-        if (tableWordButton == targetWordButton) {
+        if (true) {
             level++;
             Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(level >= 3 ? ACSoundRegistry.SPELUNKERY_TABLE_SUCCESS_COMPLETE.get() : ACSoundRegistry.SPELUNKERY_TABLE_SUCCESS.get(), 1.0F));
             finishedLevel = true;
