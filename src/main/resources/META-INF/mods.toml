@@ -5,11 +5,12 @@ issueTrackerURL="https://github.com/AlexModGuy/AlexsCavesBetaTest/issues" #optio
 [[mods]] #mandatory
 modId="alexscaves" #mandatory
 version="1.0.9" #mandatory
-displayName="Alex's Caves" #mandatory
+displayName="Alex's Caves [EZSplunk]" #mandatory
 displayURL="" #optional
 authors="Alexthe668, Noonyeyz" #optional
-credits="LudoCrypt, _Ninni, PrismaticPinky, RenRen, Gatetoh, arby698, PlummetStudios, HolidayRaptor" #optional
-description='''Explore new rare cave biomes hidden under the surface of the Overworld...'''
+credits="LudoCrypt, _Ninni, PrismaticPinky, RenRen, Gatetoh, arby698, PlummetStudios, HolidayRaptor, TheKidThatCodes" #optional
+description='''Explore new rare cave biomes hidden under the surface of the Overworld...
+Patched by TheKidThatCodes: [EZSplunk]'''
 logoFile="assets/alexscaves/textures/misc/mod_logo.png" #optional
 [[dependencies.alexscaves]] #optional
 # the modid of the dependency
