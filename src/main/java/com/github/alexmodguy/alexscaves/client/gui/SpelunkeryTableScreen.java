@@ -21,7 +21,6 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -33,10 +32,7 @@ import org.joml.Matrix4f;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 public class SpelunkeryTableScreen extends AbstractContainerScreen<SpelunkeryTableMenu> {
 
@@ -64,8 +60,6 @@ public class SpelunkeryTableScreen extends AbstractContainerScreen<SpelunkeryTab
     private ResourceLocation prevWordsFile = null;
     private List<SpelunkeryTableWordButton> wordButtons = new ArrayList<>();
     private SpelunkeryTableWordButton targetWordButton = null;
-
-    private final RandomSource random = RandomSource.create();
     private int highlightColor = 0XFFFFFF;
     private int level = 0;
     private boolean finishedLevel;
@@ -78,6 +72,8 @@ public class SpelunkeryTableScreen extends AbstractContainerScreen<SpelunkeryTab
     private boolean doneWithTutorial = false;
     private boolean invalidTablet = false;
     private ItemStack lastTablet;
+
+    private Random random = new Random();
 
     public SpelunkeryTableScreen(SpelunkeryTableMenu menu, Inventory inventory, Component name) {
         super(menu, inventory, name);
@@ -474,7 +470,9 @@ public class SpelunkeryTableScreen extends AbstractContainerScreen<SpelunkeryTab
             wordLines++;
         }
         if (!wordButtons.isEmpty()) {
-            targetWordButton = wordButtons.size() <= 1 ? wordButtons.get(0) : wordButtons.get(random.nextInt(wordButtons.size()));
+            if(Minecraft.getInstance().level != null){
+                targetWordButton = wordButtons.size() <= 1 ? wordButtons.get(0) : wordButtons.get(random.nextInt(wordButtons.size()));
+            }
             attemptsLeft = 5;
         } else {
             targetWordButton = null;

@@ -8,13 +8,12 @@ import com.github.alexmodguy.alexscaves.client.render.blockentity.HologramProjec
 import com.github.alexmodguy.alexscaves.client.render.entity.CorrodentRenderer;
 import com.github.alexmodguy.alexscaves.client.render.entity.SubmarineRenderer;
 import com.github.alexmodguy.alexscaves.client.render.item.RaygunRenderHelper;
+import com.github.alexmodguy.alexscaves.server.block.ACBlockRegistry;
 import com.github.alexmodguy.alexscaves.server.block.fluid.ACFluidRegistry;
 import com.github.alexmodguy.alexscaves.server.entity.item.BeholderEyeEntity;
 import com.github.alexmodguy.alexscaves.server.entity.item.NuclearBombEntity;
 import com.github.alexmodguy.alexscaves.server.entity.item.SubmarineEntity;
-import com.github.alexmodguy.alexscaves.server.entity.living.DinosaurEntity;
-import com.github.alexmodguy.alexscaves.server.entity.living.SubterranodonEntity;
-import com.github.alexmodguy.alexscaves.server.entity.living.TremorsaurusEntity;
+import com.github.alexmodguy.alexscaves.server.entity.living.*;
 import com.github.alexmodguy.alexscaves.server.entity.util.*;
 import com.github.alexmodguy.alexscaves.server.item.*;
 import com.github.alexmodguy.alexscaves.server.level.biome.ACBiomeRegistry;
@@ -22,6 +21,7 @@ import com.github.alexmodguy.alexscaves.server.level.biome.BiomeSampler;
 import com.github.alexmodguy.alexscaves.server.potion.ACEffectRegistry;
 import com.github.alexmodguy.alexscaves.server.potion.DarknessIncarnateEffect;
 import com.github.alexmodguy.alexscaves.server.potion.DeepsightEffect;
+import com.github.alexthe666.citadel.client.event.EventGetOutlineColor;
 import com.github.alexthe666.citadel.client.event.EventLivingRenderer;
 import com.github.alexthe666.citadel.client.event.EventPosePlayerHand;
 import com.github.alexthe666.citadel.client.event.EventRenderSplashText;
@@ -37,7 +37,10 @@ import net.minecraft.client.renderer.FogRenderer;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
@@ -46,8 +49,10 @@ import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.material.FogType;
 import net.minecraft.world.phys.AABB;
@@ -67,17 +72,24 @@ import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 
 import java.util.Arrays;
+import java.util.UUID;
 
 import static net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY;
 
 public class ClientEvents {
 
     public static final ResourceLocation POTION_EFFECT_HUD_OVERLAYS = new ResourceLocation(AlexsCaves.MODID, "textures/misc/potion_effect_hud_overlays.png");
+    public static final ResourceLocation BOSS_BAR_HUD_OVERLAYS = new ResourceLocation(AlexsCaves.MODID, "textures/misc/boss_bar_hud_overlays.png");
     public static final ResourceLocation DINOSAUR_HUD_OVERLAYS = new ResourceLocation(AlexsCaves.MODID, "textures/misc/dinosaur_hud_overlays.png");
     public static final ResourceLocation ARMOR_HUD_OVERLAYS = new ResourceLocation(AlexsCaves.MODID, "textures/misc/armor_hud_overlays.png");
     private static final ResourceLocation SUBMARINE_SHADER = new ResourceLocation(AlexsCaves.MODID, "shaders/post/submarine_light.json");
     private static final ResourceLocation WATCHER_SHADER = new ResourceLocation(AlexsCaves.MODID, "shaders/post/watcher_perspective.json");
     private static final ResourceLocation TRAIL_TEXTURE = new ResourceLocation(AlexsCaves.MODID, "textures/particle/teletor_trail.png");
+
+    private static float lastSampledFogNearness = 0.0F;
+    private static float lastSampledWaterFogFarness = 0.0F;
+    private static Vec3 lastSampledFogColor = Vec3.ZERO;
+    private static Vec3 lastSampledWaterFogColor = Vec3.ZERO;
 
     @SubscribeEvent
     public void setupEntityRotations(EventLivingRenderer.SetupRotations event) {
@@ -156,11 +168,11 @@ public class ClientEvents {
         }
     }
 
-    private static void attemptLoadShader(ResourceLocation resourceLocation){
+    private static void attemptLoadShader(ResourceLocation resourceLocation) {
         GameRenderer renderer = Minecraft.getInstance().gameRenderer;
-        if(ClientProxy.shaderLoadAttemptCooldown <= 0){
+        if (ClientProxy.shaderLoadAttemptCooldown <= 0) {
             renderer.loadEffect(resourceLocation);
-            if(!renderer.effectActive){
+            if (!renderer.effectActive) {
                 ClientProxy.shaderLoadAttemptCooldown = 12000;
                 AlexsCaves.LOGGER.warn("Alex's Caves could not load the shader {}, will attempt to load shader in 30 seconds", resourceLocation);
             }
@@ -219,14 +231,15 @@ public class ClientEvents {
             tremorAmount = watcherEntity.isPossessionBreakable() ? AlexsCaves.PROXY.getPossessionStrengthAmount(partialTick) : 0F;
         }
         if (player != null && AlexsCaves.CLIENT_CONFIG.screenShaking.get()) {
-            float shakeDistanceScale = 20F;
+            double shakeDistanceScale = 64;
             double distance = Double.MAX_VALUE;
             if (tremorAmount == 0) {
                 AABB aabb = player.getBoundingBox().inflate(shakeDistanceScale);
                 for (Mob screenShaker : Minecraft.getInstance().level.getEntitiesOfClass(Mob.class, aabb, (mob -> mob instanceof ShakesScreen))) {
-                    if (((ShakesScreen) screenShaker).canFeelShake(player) && screenShaker.distanceTo(player) < distance) {
+                    ShakesScreen shakesScreen = (ShakesScreen) screenShaker;
+                    if (shakesScreen.canFeelShake(player) && screenShaker.distanceTo(player) < distance) {
                         distance = screenShaker.distanceTo(player);
-                        tremorAmount = (1F - (float) (distance / shakeDistanceScale)) * Math.max(((ShakesScreen) screenShaker).getScreenShakeAmount(partialTick), 0F);
+                        tremorAmount = Math.min((1F - (float) Math.min(1, distance / shakesScreen.getShakeDistance())) * Math.max(shakesScreen.getScreenShakeAmount(partialTick), 0F), 2.0F);
                     }
                 }
             }
@@ -247,6 +260,12 @@ public class ClientEvents {
         }
         if (player != null && player.isPassenger() && player.getVehicle() instanceof TremorsaurusEntity && event.getCamera().isDetached()) {
             event.getCamera().move(-event.getCamera().getMaxZoom(2F), 0, 0);
+        }
+        if (player != null && player.isPassenger() && player.getVehicle() instanceof AtlatitanEntity && event.getCamera().isDetached()) {
+            event.getCamera().move(-event.getCamera().getMaxZoom(4F), 0, 0);
+        }
+        if (player != null && player.isPassenger() && player.getVehicle() instanceof TremorzillaEntity && event.getCamera().isDetached()) {
+            event.getCamera().move(-event.getCamera().getMaxZoom(10F), 0, 0);
         }
         if (player != null && player instanceof LivingEntity livingEntity && livingEntity.hasEffect(ACEffectRegistry.STUNNED.get())) {
             event.setRoll((float) (Math.sin((player.tickCount + partialTick) * 0.2F) * 10F));
@@ -343,7 +362,7 @@ public class ClientEvents {
                 rightHandGalenaGauntletUseProgress = Math.max(rightHandGalenaGauntletUseProgress, GalenaGauntletItem.getLerpedUseTime(player.getItemInHand(InteractionHand.OFF_HAND), f));
             }
         }
-        if (player.getItemInHand(InteractionHand.MAIN_HAND).getItem() instanceof LimestoneSpearItem && player.isUsingItem() && player.getUseItemRemainingTicks() > 0) {
+        if (player.getItemInHand(InteractionHand.MAIN_HAND).getItem() instanceof SpearItem && player.isUsingItem() && player.getUseItemRemainingTicks() > 0) {
             float f7 = (float) (player.getItemInHand(InteractionHand.MAIN_HAND).getUseDuration() - ((float) player.getUseItemRemainingTicks() - f + 1.0F)) / 10.0F;
             if (player.getMainArm() == HumanoidArm.RIGHT) {
                 rightHandSpearUseProgress = Math.max(rightHandSpearUseProgress, f7);
@@ -351,7 +370,7 @@ public class ClientEvents {
                 leftHandSpearUseProgress = Math.max(leftHandSpearUseProgress, f7);
             }
         }
-        if (player.getItemInHand(InteractionHand.OFF_HAND).getItem() instanceof LimestoneSpearItem && player.isUsingItem() && player.getUseItemRemainingTicks() > 0) {
+        if (player.getItemInHand(InteractionHand.OFF_HAND).getItem() instanceof SpearItem && player.isUsingItem() && player.getUseItemRemainingTicks() > 0) {
             float f7 = (float) (player.getItemInHand(InteractionHand.OFF_HAND).getUseDuration() - ((float) player.getUseItemRemainingTicks() - f + 1.0F)) / 10.0F;
             if (player.getMainArm() == HumanoidArm.RIGHT) {
                 leftHandSpearUseProgress = Math.max(leftHandSpearUseProgress, f7);
@@ -416,17 +435,17 @@ public class ClientEvents {
         if (leftHandSpearUseProgress > 0.0F) {
             float useProgress = Math.min(1F, leftHandSpearUseProgress);
             float useProgressMiddle = (float) Math.sin(useProgress * Math.PI);
-            event.getModel().leftArm.xRot = (float) Math.toRadians(45F) + useProgress * (float) Math.toRadians(115F);
-            event.getModel().leftArm.yRot = useProgressMiddle * (float) Math.toRadians(25F);
-            event.getModel().leftArm.zRot = useProgressMiddle * (float) Math.toRadians(25F);
+            event.getModel().leftArm.xRot = useProgress * ((float) Math.toRadians(-180F) + event.getModel().head.xRot);
+            event.getModel().leftArm.yRot = useProgressMiddle * ((float) Math.toRadians(-25F) - event.getModel().head.yRot);
+            event.getModel().leftArm.zRot = useProgress * (float) Math.toRadians(50F) - (float) Math.toRadians(25F);
             event.setResult(Event.Result.ALLOW);
         }
         if (rightHandSpearUseProgress > 0.0F) {
             float useProgress = Math.min(1F, rightHandSpearUseProgress);
             float useProgressMiddle = (float) Math.sin(useProgress * Math.PI);
-            event.getModel().rightArm.xRot = (float) Math.toRadians(45F) + useProgress * (float) Math.toRadians(115F);
-            event.getModel().rightArm.yRot = useProgressMiddle * -(float) Math.toRadians(25F);
-            event.getModel().rightArm.zRot = useProgressMiddle * -(float) Math.toRadians(25F);
+            event.getModel().rightArm.xRot = useProgress * ((float) Math.toRadians(-180F) + event.getModel().head.xRot);
+            event.getModel().rightArm.yRot = useProgressMiddle * ((float) Math.toRadians(25F) - event.getModel().head.yRot);
+            event.getModel().rightArm.zRot = useProgress * -(float) Math.toRadians(50F) + (float) Math.toRadians(25F);
             event.setResult(Event.Result.ALLOW);
         }
         if (event.getEntityIn().getVehicle() instanceof NuclearBombEntity) {
@@ -471,17 +490,35 @@ public class ClientEvents {
             int k = screenHeight - forgeGuiY - AlexsCaves.CLIENT_CONFIG.subterranodonIndicatorY.get();
             float f = dinosaur.getMeterAmount();
             float invProgress = 1 - f;
-            int uvOffset = 0;
+            int uOffset = 0;
+            int vOffset = 0;
+            int dinoHeight = 31;
             if (dinosaur instanceof TremorsaurusEntity) {
-                uvOffset = 63;
+                vOffset = 63;
                 k += 5;
                 hudY = 20;
-            }else{
+            } else if (dinosaur instanceof AtlatitanEntity) {
+                vOffset = 126;
+                dinoHeight = 32;
+                k += 3;
+                hudY = 40;
+            } else if (dinosaur instanceof TremorzillaEntity tremorzilla) {
+                vOffset = 193;
+                if (tremorzilla.isPowered() && !tremorzilla.isFiring() && tremorzilla.getSpikesDownAmount() > 0) {
+                    if (tremorzilla.tickCount / 2 % 2 == 1) {
+                        vOffset = 251;
+                    }
+                    invProgress = 1F;
+                }
+                dinoHeight = 29;
+                k += 5;
+                hudY = 20;
+            } else {
                 hudY = 40;
             }
             event.getGuiGraphics().pose().pushPose();
-            event.getGuiGraphics().blit(DINOSAUR_HUD_OVERLAYS, j, k, 50, 0, uvOffset + 31, 43, 31, 128, 128);
-            event.getGuiGraphics().blit(DINOSAUR_HUD_OVERLAYS, j, k, 50, 0, uvOffset, 43, (int) Math.floor(31 * invProgress), 128, 128);
+            event.getGuiGraphics().blit(DINOSAUR_HUD_OVERLAYS, j, k, 50, uOffset, vOffset + dinoHeight, 43, dinoHeight, 128, 512);
+            event.getGuiGraphics().blit(DINOSAUR_HUD_OVERLAYS, j, k, 50, uOffset, vOffset, 43, (int) Math.floor(dinoHeight * invProgress), 128, 512);
             event.getGuiGraphics().pose().popPose();
         }
         if (event.getOverlay().id().equals(VanillaGuiOverlay.CROSSHAIR.id()) && DarknessArmorItem.hasMeter(player)) {
@@ -561,9 +598,43 @@ public class ClientEvents {
     }
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
+    public void renderBossOverlay(CustomizeGuiOverlayEvent.BossEventProgress event) {
+        if (ClientProxy.bossBarRenderTypes.containsKey(event.getBossEvent().getId())) {
+            int renderTypeFor = ClientProxy.bossBarRenderTypes.get(event.getBossEvent().getId());
+            int i = event.getGuiGraphics().guiWidth();
+            int j = event.getY();
+            Component component = event.getBossEvent().getName();
+            if (renderTypeFor == 0) {
+                event.setCanceled(true);
+                event.getGuiGraphics().blit(BOSS_BAR_HUD_OVERLAYS, event.getX(), event.getY(), 0, 0, 182, 15);
+                int progressScaled = (int) (event.getBossEvent().getProgress() * 183.0F);
+                event.getGuiGraphics().blit(BOSS_BAR_HUD_OVERLAYS, event.getX(), event.getY(), 0, 15, progressScaled, 15);
+                int l = Minecraft.getInstance().font.width(component);
+                int i1 = i / 2 - l / 2;
+                int j1 = j - 9;
+                PoseStack poseStack = event.getGuiGraphics().pose();
+                poseStack.pushPose();
+                poseStack.translate(i1, j1, 0);
+                Minecraft.getInstance().font.drawInBatch8xOutline(component.getVisualOrderText(), 0.0F, 0.0F, 0XFF5100, 0X361515, poseStack.last().pose(), event.getGuiGraphics().bufferSource(), 240);
+                poseStack.popPose();
+                event.setIncrement(event.getIncrement() + 7);
+            }
+        }
+    }
+
+    @SubscribeEvent(priority = EventPriority.LOWEST)
     public void fogRender(ViewportEvent.RenderFog event) {
+        if (event.isCanceled()) {
+            //another mod has cancelled fog rendering.
+            return;
+        }
+        //some mods incorrectly set the RenderSystem fog start and end directly, so this will have to do as a band-aid...
+        float defaultFarPlaneDistance = RenderSystem.getShaderFogEnd();
+        float defaultNearPlaneDistance = RenderSystem.getShaderFogStart();
+
         Entity player = Minecraft.getInstance().getCameraEntity();
         FluidState fluidstate = player.level().getFluidState(event.getCamera().getBlockPosition());
+        BlockState blockState = player.level().getBlockState(event.getCamera().getBlockPosition());
         if (!fluidstate.isEmpty() && fluidstate.getType().getFluidType().equals(ACFluidRegistry.ACID_FLUID_TYPE.get())) {
             event.setCanceled(true);
             float farness = 10.0F;
@@ -574,76 +645,83 @@ public class ClientEvents {
             event.setNearPlaneDistance(0.0F);
             return;
         }
-        if (event.getCamera().getFluidInCamera() == FogType.WATER && AlexsCaves.CLIENT_CONFIG.biomeWaterFogOverrides.get()) {
-            int i = Minecraft.getInstance().options.biomeBlendRadius().get();
-            float farness;
-            if (i == 0) {
-                farness = ACBiomeRegistry.getBiomeWaterFogFarness(player.level().getBiome(player.blockPosition()));
-            } else {
-                farness = BiomeSampler.sampleBiomesFloat(player.level(), player.position(), ACBiomeRegistry::getBiomeWaterFogFarness);
+        if (blockState.is(ACBlockRegistry.PRIMAL_MAGMA.get()) || blockState.is(ACBlockRegistry.FISSURE_PRIMAL_MAGMA.get())) {
+            event.setCanceled(true);
+            float farness = 2.0F;
+            if (Minecraft.getInstance().player.hasEffect(ACEffectRegistry.DEEPSIGHT.get())) {
+                farness *= 1.0F + 1.5F * DeepsightEffect.getIntensity(Minecraft.getInstance().player, (float) event.getPartialTick());
             }
+            event.setFarPlaneDistance(farness);
+            event.setNearPlaneDistance(0.0F);
+            return;
+        }
+        if (event.getCamera().getFluidInCamera() == FogType.WATER && AlexsCaves.CLIENT_CONFIG.biomeWaterFogOverrides.get()) {
+            float farness = lastSampledWaterFogFarness;
             if (Minecraft.getInstance().player.hasEffect(ACEffectRegistry.DEEPSIGHT.get())) {
                 farness *= 1.0F + 1.5F * DeepsightEffect.getIntensity(Minecraft.getInstance().player, (float) event.getPartialTick());
             }
             if (farness != 1.0F) {
                 event.setCanceled(true);
-                event.setFarPlaneDistance(event.getFarPlaneDistance() * farness);
+                event.setFarPlaneDistance(defaultFarPlaneDistance * farness);
             }
         } else if (event.getMode() == FogRenderer.FogMode.FOG_TERRAIN && AlexsCaves.CLIENT_CONFIG.biomeSkyFogOverrides.get()) {
-            int i = Minecraft.getInstance().options.biomeBlendRadius().get();
-            float nearness;
-            if (i == 0) {
-                nearness = ACBiomeRegistry.getBiomeFogNearness(player.level().getBiome(player.blockPosition()));
-            } else {
-                nearness = BiomeSampler.sampleBiomesFloat(player.level(), player.position(), ACBiomeRegistry::getBiomeFogNearness);
+            float nearness = lastSampledFogNearness;
+            float primordialBossAmount = AlexsCaves.PROXY.getPrimordialBossActiveAmount((float) event.getPartialTick());
+            boolean flag = Math.abs(nearness) - 1.0F < 0.01F;
+            if (primordialBossAmount > 0.0F) {
+                flag = true;
+                nearness *= (1.0F - primordialBossAmount * 0.75F);
             }
-
-            if (nearness != 1.0F) {
+            if (flag) {
                 event.setCanceled(true);
-                event.setNearPlaneDistance(event.getNearPlaneDistance() * nearness);
+                event.setNearPlaneDistance(defaultNearPlaneDistance * nearness);
             }
         }
     }
 
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
     public void fogColor(ViewportEvent.ComputeFogColor event) {
         Entity player = Minecraft.getInstance().player;
-        if (player.getEyeInFluidType() != null && player.getEyeInFluidType().equals(ACFluidRegistry.ACID_FLUID_TYPE.get())) {
+        BlockState blockState = player.level().getBlockState(event.getCamera().getBlockPosition());
+        if (blockState.is(ACBlockRegistry.PRIMAL_MAGMA.get()) || blockState.is(ACBlockRegistry.FISSURE_PRIMAL_MAGMA.get())) {
+            event.setRed((float) (1F));
+            event.setGreen((float) (0.4F));
+            event.setBlue((float) (0));
+        } else if (player.getEyeInFluidType() != null && player.getEyeInFluidType().equals(ACFluidRegistry.ACID_FLUID_TYPE.get())) {
             event.setRed((float) (0));
             event.setGreen((float) (1));
             event.setBlue((float) (0));
         } else if (event.getCamera().getFluidInCamera() == FogType.NONE && AlexsCaves.CLIENT_CONFIG.biomeSkyFogOverrides.get()) {
-            int i = Minecraft.getInstance().options.biomeBlendRadius().get();
-            float override;
-            if (i == 0) {
-                override = ACBiomeRegistry.getBiomeSkyOverride(player.level().getBiome(player.blockPosition()));
-            } else {
-                override = BiomeSampler.sampleBiomesFloat(player.level(), player.position(), ACBiomeRegistry::getBiomeSkyOverride);
-            }
+            float override = ClientProxy.acSkyOverrideAmount;
+            float setR = event.getRed();
+            float setG = event.getGreen();
+            float setB = event.getBlue();
+
+            boolean flag = false;
             if (override != 0.0F) {
-                Vec3 vec3;
-                if (i == 0) {
-                    vec3 = ((ClientLevel) player.level()).effects().getBrightnessDependentFogColor(Vec3.fromRGB24(player.level().getBiomeManager().getNoiseBiomeAtPosition(player.blockPosition()).value().getFogColor()), 1.0F);
-                } else {
-                    vec3 = ((ClientLevel) player.level()).effects().getBrightnessDependentFogColor(BiomeSampler.sampleBiomesVec3(player.level(), player.position(), biomeHolder -> Vec3.fromRGB24(biomeHolder.value().getFogColor())), 1.0F);
-                }
-                float prevR = event.getRed();
-                float prevG = event.getGreen();
-                float prevB = event.getBlue();
-                event.setRed((float) (vec3.x - prevR) * override + prevR);
-                event.setGreen((float) (vec3.y - prevG) * override + prevG);
-                event.setBlue((float) (vec3.z - prevB) * override + prevB);
+                flag = true;
+                Vec3 vec3 = lastSampledFogColor;
+                setR = (float) (vec3.x - setR) * override + setR;
+                setG = (float) (vec3.y - setG) * override + setG;
+                setB = (float) (vec3.z - setB) * override + setB;
+            }
+            float primordialBossAmount = AlexsCaves.PROXY.getPrimordialBossActiveAmount((float) event.getPartialTick());
+            if (primordialBossAmount > 0.0F) {
+                flag = true;
+                setR = (float) (0.8F - setR) * primordialBossAmount + setR;
+                setG = (float) (0.2F - setG) * primordialBossAmount + setG;
+                setB = (float) (0.15F - setB) * primordialBossAmount + setB;
+            }
+            if (flag) {
+                event.setRed(setR);
+                event.setGreen(setG);
+                event.setBlue(setB);
             }
         } else if (event.getCamera().getFluidInCamera() == FogType.WATER && AlexsCaves.CLIENT_CONFIG.biomeWaterFogOverrides.get()) {
             int i = Minecraft.getInstance().options.biomeBlendRadius().get();
-            float override;
-            if (i == 0) {
-                override = ACBiomeRegistry.getBiomeSkyOverride(player.level().getBiome(player.blockPosition()));
-            } else {
-                override = BiomeSampler.sampleBiomesFloat(player.level(), player.position(), ACBiomeRegistry::getBiomeSkyOverride);
-            }
+            float override = ClientProxy.acSkyOverrideAmount;
             if (override != 0) {
-                Vec3 vec3 = Vec3.fromRGB24(player.level().getBiomeManager().getNoiseBiomeAtPosition(player.blockPosition()).value().getWaterFogColor());
+                Vec3 vec3 = lastSampledWaterFogColor;
                 event.setRed((float) (event.getRed() + (vec3.x - event.getRed()) * override));
                 event.setGreen((float) (event.getGreen() + (vec3.y - event.getGreen()) * override));
                 event.setBlue((float) (event.getBlue() + (vec3.z - event.getBlue()) * override));
@@ -695,7 +773,7 @@ public class ClientEvents {
         }
     }
 
-    private static float calculateBiomeAmbientLight(Player player) {
+    private static float calculateBiomeAmbientLight(Entity player) {
         int i = Minecraft.getInstance().options.biomeBlendRadius().get();
         if (i == 0) {
             return ACBiomeRegistry.getBiomeAmbientLight(player.level().getBiome(player.blockPosition()));
@@ -704,7 +782,7 @@ public class ClientEvents {
         }
     }
 
-    private static Vec3 calculateBiomeLightColor(Player player) {
+    private static Vec3 calculateBiomeLightColor(Entity player) {
         int i = Minecraft.getInstance().options.biomeBlendRadius().get();
         if (i == 0) {
             return ACBiomeRegistry.getBiomeLightColorOverride(player.level().getBiome(player.blockPosition()));
@@ -713,20 +791,75 @@ public class ClientEvents {
         }
     }
 
+    private static float calculateBiomeFogNearness(Entity player) {
+        int i = Minecraft.getInstance().options.biomeBlendRadius().get();
+        float nearness;
+        if (i == 0) {
+            nearness = ACBiomeRegistry.getBiomeFogNearness(player.level().getBiome(player.blockPosition()));
+        } else {
+            nearness = BiomeSampler.sampleBiomesFloat(player.level(), player.position(), ACBiomeRegistry::getBiomeFogNearness);
+        }
+        return nearness;
+    }
+
+    private static float calculateBiomeWaterFogFarness(Entity player) {
+        int i = Minecraft.getInstance().options.biomeBlendRadius().get();
+        float farness;
+        if (i == 0) {
+            farness = ACBiomeRegistry.getBiomeWaterFogFarness(player.level().getBiome(player.blockPosition()));
+        } else {
+            farness = BiomeSampler.sampleBiomesFloat(player.level(), player.position(), ACBiomeRegistry::getBiomeWaterFogFarness);
+        }
+        return farness;
+    }
+
+    private static Vec3 calculateBiomeFogColor(Entity player) {
+        int i = Minecraft.getInstance().options.biomeBlendRadius().get();
+        Vec3 vec3;
+        if (i == 0) {
+            vec3 = ((ClientLevel) player.level()).effects().getBrightnessDependentFogColor(Vec3.fromRGB24(player.level().getBiomeManager().getNoiseBiomeAtPosition(player.blockPosition()).value().getFogColor()), 1.0F);
+        } else {
+            vec3 = ((ClientLevel) player.level()).effects().getBrightnessDependentFogColor(BiomeSampler.sampleBiomesVec3(player.level(), player.position(), biomeHolder -> Vec3.fromRGB24(biomeHolder.value().getFogColor())), 1.0F);
+        }
+        return vec3;
+    }
+
+    private Vec3 calculateBiomeWaterFogColor(Entity player) {
+        int i = Minecraft.getInstance().options.biomeBlendRadius().get();
+        Vec3 vec3;
+        if (i == 0) {
+            vec3 = ((ClientLevel) player.level()).effects().getBrightnessDependentFogColor(Vec3.fromRGB24(player.level().getBiomeManager().getNoiseBiomeAtPosition(player.blockPosition()).value().getWaterFogColor()), 1.0F);
+        } else {
+            vec3 = ((ClientLevel) player.level()).effects().getBrightnessDependentFogColor(BiomeSampler.sampleBiomesVec3(player.level(), player.position(), biomeHolder -> Vec3.fromRGB24(biomeHolder.value().getWaterFogColor())), 1.0F);
+        }
+        return vec3;
+    }
+
     @SubscribeEvent
     public void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase == TickEvent.Phase.END) {
-            Player player = Minecraft.getInstance().player;
+            Entity cameraEntity = Minecraft.getInstance().cameraEntity;
             float partialTicks = AlexsCaves.PROXY.getPartialTicks();
             if (ClientProxy.shaderLoadAttemptCooldown > 0) {
                 ClientProxy.shaderLoadAttemptCooldown--;
             }
+            ClientProxy.prevPrimordialBossActiveAmount = ClientProxy.primordialBossActiveAmount;
             ClientProxy.prevNukeFlashAmount = ClientProxy.nukeFlashAmount;
-            if(player != null){
+            if (cameraEntity != null) {
+                ClientProxy.acSkyOverrideAmount = ACBiomeRegistry.calculateBiomeSkyOverride(cameraEntity);
+                if (ClientProxy.acSkyOverrideAmount > 0) {
+                    ClientProxy.acSkyOverrideColor = BiomeSampler.sampleBiomesVec3(Minecraft.getInstance().level, Minecraft.getInstance().cameraEntity.position(), biomeHolder -> Vec3.fromRGB24(biomeHolder.value().getSkyColor()));
+                }
                 ClientProxy.lastBiomeLightColorPrev = ClientProxy.lastBiomeLightColor;
-                ClientProxy.lastBiomeLightColor = calculateBiomeLightColor(player);
+                ClientProxy.lastBiomeLightColor = calculateBiomeLightColor(cameraEntity);
                 ClientProxy.lastBiomeAmbientLightAmountPrev = ClientProxy.lastBiomeAmbientLightAmount;
-                ClientProxy.lastBiomeAmbientLightAmount = calculateBiomeAmbientLight(player);
+                ClientProxy.lastBiomeAmbientLightAmount = calculateBiomeAmbientLight(cameraEntity);
+                lastSampledFogNearness = calculateBiomeFogNearness(cameraEntity);
+                lastSampledWaterFogFarness = calculateBiomeWaterFogFarness(cameraEntity);
+                if (cameraEntity.level() instanceof ClientLevel) { //fixes crash with beholder
+                    lastSampledFogColor = calculateBiomeFogColor(cameraEntity);
+                    lastSampledWaterFogColor = calculateBiomeWaterFogColor(cameraEntity);
+                }
             }
             if (ClientProxy.renderNukeSkyDarkFor > 0) {
                 ClientProxy.renderNukeSkyDarkFor--;
@@ -738,6 +871,20 @@ public class ClientEvents {
                 }
             } else if (ClientProxy.masterVolumeNukeModifier > 0.0F) {
                 ClientProxy.masterVolumeNukeModifier -= 0.1F;
+            }
+            if (ClientProxy.lastBossLevel != Minecraft.getInstance().level) {
+                ClientProxy.primordialBossActive = false;
+                ClientProxy.primordialBossActiveAmount = 0;
+                ClientProxy.lastBossLevel = Minecraft.getInstance().level;
+            }
+            if (ClientProxy.primordialBossActive) {
+                if (ClientProxy.primordialBossActiveAmount < 1.0F) {
+                    ClientProxy.primordialBossActiveAmount += 0.025F;
+                }
+            } else {
+                if (ClientProxy.primordialBossActiveAmount > 0.0F) {
+                    ClientProxy.primordialBossActiveAmount -= 0.025F;
+                }
             }
             if (ClientProxy.renderNukeFlashFor > 0) {
                 if (ClientProxy.nukeFlashAmount < 1F) {
@@ -771,6 +918,22 @@ public class ClientEvents {
             }
             if (Minecraft.getInstance().screen instanceof AdvancementsScreen advancementsScreen && advancementsScreen.selectedTab != null && ACAdvancementTabs.isAlexsCavesWidget(advancementsScreen.selectedTab.getAdvancement())) {
                 ACAdvancementTabs.tick();
+            }
+            if (ClientProxy.primordialBossActive && Minecraft.getInstance().level != null && !Minecraft.getInstance().isPaused()) {
+                ClientLevel level = Minecraft.getInstance().level;
+                BlockPos cameraBlockPos = Minecraft.getInstance().getCameraEntity().blockPosition();
+                BlockPos.MutableBlockPos trySpawnParticleBlockPos = new BlockPos.MutableBlockPos();
+                int dist = 16;
+                for (int particles = 0; particles < 100; ++particles) {
+                    int i = cameraBlockPos.getX() + level.random.nextInt(dist) - level.random.nextInt(dist);
+                    int j = cameraBlockPos.getY() + level.random.nextInt(dist) - level.random.nextInt(dist);
+                    int k = cameraBlockPos.getZ() + level.random.nextInt(dist) - level.random.nextInt(dist);
+                    trySpawnParticleBlockPos.set(i, j, k);
+                    BlockState blockstate = level.getBlockState(trySpawnParticleBlockPos);
+                    if (!blockstate.isCollisionShapeFullBlock(level, trySpawnParticleBlockPos)) {
+                        level.addParticle(ParticleTypes.ASH, (double) trySpawnParticleBlockPos.getX() + level.random.nextDouble(), (double) trySpawnParticleBlockPos.getY() + level.random.nextDouble(), (double) trySpawnParticleBlockPos.getZ() + level.random.nextDouble(), 0.0D, 0.0D, 0.0D);
+                    }
+                }
             }
         }
     }
@@ -819,6 +982,24 @@ public class ClientEvents {
             event.setResult(Event.Result.ALLOW);
             event.setSplashText("30k downloads max");
             event.setSplashTextColor(0X00B6D5);
+        }
+    }
+
+    @SubscribeEvent
+    public void outlineColor(EventGetOutlineColor event) {
+        if (Minecraft.getInstance().player.getUseItem() != null && Minecraft.getInstance().player.getUseItem().is(ACItemRegistry.TOTEM_OF_POSSESSION.get())) {
+            ItemStack stack = Minecraft.getInstance().player.getUseItem();
+            UUID boundUUID = TotemOfPossessionItem.getBoundEntityUUID(stack);
+            if (boundUUID != null && boundUUID.equals(event.getEntityIn().getUUID())) {
+                event.setResult(Event.Result.ALLOW);
+                event.setColor(0xFF0000);
+            }
+        }
+        if (event.getEntityIn() instanceof ItemEntity item) {
+            if (item.getItem().is(ACItemRegistry.TECTONIC_SHARD.get())) {
+                event.setResult(Event.Result.ALLOW);
+                event.setColor(0XFFDB00);
+            }
         }
     }
 }

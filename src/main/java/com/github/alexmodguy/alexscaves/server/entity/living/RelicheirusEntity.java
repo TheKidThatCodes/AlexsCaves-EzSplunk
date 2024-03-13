@@ -27,6 +27,7 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.*;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
+import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
@@ -87,6 +88,10 @@ public class RelicheirusEntity extends DinosaurEntity implements IAnimatedEntity
         this.goalSelector.addGoal(9, new RandomLookAroundGoal(this));
         this.targetSelector.addGoal(1, (new HurtByTargetGoal(this, RelicheirusEntity.class)));
         this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, TrilocarisEntity.class, 100, true, false, null));
+    }
+
+    protected PathNavigation createNavigation(Level level) {
+        return new AdvancedPathNavigateNoTeleport(this, level);
     }
 
     protected void playStepSound(BlockPos pos, BlockState state) {
