@@ -1,11 +1,10 @@
 package com.github.alexmodguy.alexscaves.client.render.entity;
 
 import com.github.alexmodguy.alexscaves.client.ClientProxy;
-import com.github.alexmodguy.alexscaves.client.model.HullbreakerModel;
-import com.github.alexmodguy.alexscaves.client.model.NotorModel;
-import com.github.alexmodguy.alexscaves.client.model.UnderzealotModel;
+import com.github.alexmodguy.alexscaves.client.model.*;
 import com.github.alexmodguy.alexscaves.client.render.ACRenderTypes;
 import com.github.alexmodguy.alexscaves.server.entity.living.DeepOneMageEntity;
+import com.github.alexmodguy.alexscaves.server.entity.living.FerrouslimeEntity;
 import com.github.alexmodguy.alexscaves.server.entity.living.NotorEntity;
 import com.github.alexmodguy.alexscaves.server.misc.ACMath;
 import com.github.alexthe666.citadel.client.shader.PostEffectRegistry;
@@ -143,7 +142,7 @@ public class NotorRenderer extends MobRenderer<NotorEntity, NotorModel> {
                 entityIn.xRotO = 0;
                 entityIn.setYRot(0);
                 entityIn.yRotO = 0;
-                if (render instanceof LivingEntityRenderer<?, ?> renderer) {
+                if (render instanceof LivingEntityRenderer renderer && renderer.getModel() != null) {
                     EntityModel model = renderer.getModel();
                     VertexConsumer ivertexbuilder = bufferIn.getBuffer(ACRenderTypes.getHologram(entityIn instanceof DeepOneMageEntity ? DeepOneMageRenderer.TEXTURE : render.getTextureLocation(entityIn)));
                     matrixStack.pushPose();
@@ -162,6 +161,12 @@ public class NotorRenderer extends MobRenderer<NotorEntity, NotorModel> {
                     if(model instanceof HullbreakerModel hullbreakerModel){
                         hullbreakerModel.straighten = true;
                     }
+                    if(model instanceof SauropodBaseModel sauropodBaseModel){
+                        sauropodBaseModel.straighten = true;
+                    }
+                    if(model instanceof TremorzillaModel tremorzillaModel){
+                        tremorzillaModel.straighten = true;
+                    }
                     model.setupAnim(living, 0.0F, 0.0F, -0.1F, 0.0F, 0.0F);
 
                     if(model instanceof UnderzealotModel underzealotModel){
@@ -170,12 +175,27 @@ public class NotorRenderer extends MobRenderer<NotorEntity, NotorModel> {
                     if(model instanceof HullbreakerModel hullbreakerModel){
                         hullbreakerModel.straighten = false;
                     }
-                    matrixStack.scale(living.getScale(), -living.getScale(), living.getScale());
+                    if(model instanceof SauropodBaseModel sauropodBaseModel){
+                        sauropodBaseModel.straighten = false;
+                    }
+                    if(model instanceof TremorzillaModel tremorzillaModel){
+                        tremorzillaModel.straighten = false;
+                    }
+                    matrixStack.scale(-living.getScale(), -living.getScale(), living.getScale());
+                    ((LivingEntityRendererAccessor)renderer).scaleForHologram(living, matrixStack, partialTicks);
                     model.renderToBuffer(matrixStack, ivertexbuilder, 240, OverlayTexture.NO_OVERLAY, 1.0F, 1.0F, 1.0F, 1.0F);
                     matrixStack.popPose();
                     if (model instanceof HumanoidModel<?> humanoidModel) {
                         humanoidModel.crouching = prevCrouching;
                     }
+                }else if(render instanceof FerrouslimeRenderer && living instanceof FerrouslimeEntity ferrouslime){
+                    matrixStack.pushPose();
+                    matrixStack.translate(0, -1, 0);
+                    matrixStack.scale(-living.getScale(), -living.getScale(), living.getScale());
+                    VertexConsumer ivertexbuilder = bufferIn.getBuffer(ACRenderTypes.getHologram(render.getTextureLocation(entityIn)));
+                    FerrouslimeRenderer.FERROUSLIME_MODEL.setupAnim(ferrouslime, 0.0F, 0.0F, -0.1F, 0.0F, 0.0F);
+                    FerrouslimeRenderer.FERROUSLIME_MODEL.renderToBuffer(matrixStack, ivertexbuilder, 240, OverlayTexture.NO_OVERLAY, 1.0F, 1.0F, 1.0F, 1.0F);
+                    matrixStack.popPose();
                 }
                 entityIn.setXRot(xRot);
                 entityIn.xRotO = xRotOld;

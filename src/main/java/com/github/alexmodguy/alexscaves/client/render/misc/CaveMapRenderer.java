@@ -23,24 +23,21 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.BiomeTags;
 import net.minecraft.util.FastColor;
 import net.minecraft.util.Mth;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Biomes;
-import net.minecraft.world.level.levelgen.LegacyRandomSource;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.Tags;
 import org.joml.Matrix4f;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class CaveMapRenderer {
 
     private static final Map<ItemStack, CaveMapRenderer> CAVE_MAPS_ITEM_FRAME = new HashMap<>();
     private static final Map<ItemStack, CaveMapRenderer> CAVE_MAPS_HAND = new HashMap<>();
-    public static final RenderType MAP_BACKGROUND = RenderType.text(new ResourceLocation("textures/map/map_background.png"));
+    public static final ResourceLocation MAP_BACKGROUND = new ResourceLocation("textures/map/map_background.png");
     public static final RenderType CAVE_MAP_PLAYER_TEXTURE = RenderType.text(new ResourceLocation(AlexsCaves.MODID, "textures/misc/map/cave_map_player.png"));
     public static final RenderType CAVE_MAP_PLAYER_DIRECTION_TEXTURE = RenderType.text(new ResourceLocation(AlexsCaves.MODID, "textures/misc/map/cave_map_player_direction.png"));
     private final RenderType renderType;
@@ -52,6 +49,8 @@ public class CaveMapRenderer {
 
     private final boolean transparent;
 
+    private final Random random = new Random(42L);
+
     public CaveMapRenderer(BlockPos target, int[] mapBiomes, long seed, boolean transparent, int index) {
         this.transparent = transparent;
         this.target = target;
@@ -60,7 +59,7 @@ public class CaveMapRenderer {
         ResourceLocation resourcelocation = Minecraft.getInstance().textureManager.register("cave_map/" + index + (transparent ? "" : "_frame"), this.texture);
         this.renderType = RenderType.text(resourcelocation);
         updateTexture();
-        updateLabels(new LegacyRandomSource(seed));
+        updateLabels();
     }
 
     public static CaveMapRenderer getMapFor(ItemStack item, boolean transparent) {
@@ -125,7 +124,7 @@ public class CaveMapRenderer {
         return false;
     }
 
-    private void updateLabels(LegacyRandomSource random) {
+    private void updateLabels() {
         labels.clear();
         int extraBiomes = random.nextInt(3) + 3;
         Registry<Biome> registry = Minecraft.getInstance().level.registryAccess().registry(Registries.BIOME).orElse(null);

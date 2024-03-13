@@ -10,9 +10,7 @@ import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Rotation;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.network.PlayMessages;
 
 public class FallingTreeBlockEntity extends AbstractMovingBlockEntity {
@@ -73,10 +71,6 @@ public class FallingTreeBlockEntity extends AbstractMovingBlockEntity {
             this.remove(RemovalReason.DISCARDED);
         }
         this.setFallProgress(Math.min(this.getFallProgress() + 0.05F, 1F));
-    }
-
-    private void createBlockDropAt(BlockPos fallPos, BlockState state, CompoundTag blockData) {
-        Block.dropResources(state, level(), fallPos);
     }
 
     public Rotation getRotationFromDirection(Direction direction) {

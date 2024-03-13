@@ -5,7 +5,6 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.control.MoveControl;
-import net.minecraft.world.phys.Vec3;
 
 public class VerticalSwimmingMoveControl extends MoveControl {
 
@@ -22,9 +21,9 @@ public class VerticalSwimmingMoveControl extends MoveControl {
 
     public void tick() {
         if (this.operation == Operation.MOVE_TO && !this.mob.getNavigation().isDone()) {
-            Vec3 ed = this.mob.getNavigation().getTargetPos().getCenter();
-            //((ServerLevel)mob.level).sendParticles(ParticleTypes.HEART, ed.x, ed.y, ed.z, 0, 0, 0, 0, 1);
-            //((ServerLevel)mob.level).sendParticles(ParticleTypes.SNEEZE, wantedX, wantedY, wantedZ, 0, 0, 0, 0, 1);
+            //Vec3 ed = this.mob.getNavigation().getTargetPos().getCenter();
+            //((ServerLevel)mob.level()).sendParticles(ParticleTypes.HEART, ed.x, ed.y, ed.z, 0, 0, 0, 0, 1);
+            //((ServerLevel)mob.level()).sendParticles(ParticleTypes.SNEEZE, wantedX, wantedY, wantedZ, 0, 0, 0, 0, 1);
             double d0 = this.wantedX - this.mob.getX();
             double d1 = this.wantedY - this.mob.getY();
             double d2 = this.wantedZ - this.mob.getZ();
