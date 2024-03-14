@@ -271,7 +271,7 @@ public class SpelunkeryTableScreen extends AbstractContainerScreen<SpelunkeryTab
     }
 
     public boolean hasPaper() {
-        return menu.getSlot(1).hasItem() && menu.getSlot(1).getItem().is(Items.PAPER);
+        return true;
     }
 
     public boolean isFirstTimeUsing() {
