@@ -340,7 +340,7 @@ public class SpelunkeryTableScreen extends AbstractContainerScreen<SpelunkeryTab
             fullResetWords();
         } else if (finishedLevel && passLevelProgress >= 10.0F && attemptsLeft <= 0) {
             level = 0;
-            AlexsCaves.NETWORK_WRAPPER.sendToServer(new SpelunkeryTableChangeMessage(false));
+            // AlexsCaves.NETWORK_WRAPPER.sendToServer(new SpelunkeryTableChangeMessage(false));
             fullResetWords();
             Minecraft.getInstance().setScreen(null);
         }
