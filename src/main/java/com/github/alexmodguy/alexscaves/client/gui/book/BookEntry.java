@@ -198,16 +198,7 @@ public class BookEntry {
         2 = super secret, no ???
      */
     public int getVisibility(CaveBookScreen caveBookScreen){
-        if(this.requiredProgress == null){
-            return 0;
-        }else{
-            if(caveBookScreen.getCaveBookProgress().isUnlockedFor(requiredProgress)){
-                return 0;
-            }else {
-                CaveBookProgress.Subcategory subcategory = caveBookScreen.getCaveBookProgress().getSubcategoryFromPage(requiredProgress);
-                return subcategory == CaveBookProgress.Subcategory.SECRETS ? 2 : 1;
-            }
-        }
+        return 0;
     }
 
     public static class Deserializer implements JsonDeserializer<BookEntry> {
