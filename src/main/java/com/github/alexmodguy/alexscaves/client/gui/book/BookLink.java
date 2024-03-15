@@ -13,7 +13,7 @@ public class BookLink {
         this.characterStartsAt = characterStartsAt;
         this.displayText = displayText;
         this.linksTo = linksTo;
-        this.enabled = enabled;
+        this.enabled = true;
     }
 
     public int getLineNumber() {
